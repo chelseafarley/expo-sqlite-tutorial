@@ -18,7 +18,9 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "usesIcloudStorage": true,
+      "bundleIdentifier": "com.misscoding.sqliteexample"
     },
     "android": {
       "adaptiveIcon": {
@@ -28,6 +30,19 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Development"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "80e2826c-02cd-428b-86c1-c8868a7a7163"
+      }
     }
   }
 }

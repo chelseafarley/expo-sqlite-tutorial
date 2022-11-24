@@ -1,14 +1,99 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, TextInput, Button } from 'react-native';
+import { StyleSheet, Text, View, TextInput, Button, Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 import { useState, useEffect } from 'react';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
+
 // expo add expo-sqlite
+// expo add expo-file-system
+// expo add expo-document-picker
+// expo add expo-sharing
+// expo add expo-dev-client
+
+/*
+  For testing expo-document-picker on iOS we need a standalone app 
+  which is why we install expo-dev-client
+  
+  If you don't have eas installed then install using the following command:
+  npm install -g eas-cli
+
+  eas login
+  eas build:configure
+
+  Build for local development on iOS or Android:
+  eas build -p ios --profile development --local
+  OR
+  eas build -p android --profile development --local
+
+  May need to install the following to build locally (which allows debugging)
+  npm install -g yarn
+  brew install fastlane
+
+  After building install on your device:
+  For iOS (simulator): https://docs.expo.dev/build-reference/simulators/
+  For Android: https://docs.expo.dev/build-reference/apk/
+
+  Run on installed app:
+  expo start --dev-client
+*/
+
 
 export default function App() {
-  const db = SQLite.openDatabase('example.db');
+  const [db, setDb] = useState(SQLite.openDatabase('example.db'));
   const [isLoading, setIsLoading] = useState(true);
   const [names, setNames] = useState([]);
   const [currentName, setCurrentName] = useState(undefined);
+
+  const exportDb = async () => {
+    if (Platform.OS === "android") {
+      const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+      if (permissions.granted) {
+        const base64 = await FileSystem.readAsStringAsync(
+          FileSystem.documentDirectory + 'SQLite/example.db',
+          {
+            encoding: FileSystem.EncodingType.Base64
+          }
+        );
+
+        await FileSystem.StorageAccessFramework.createFileAsync(permissions.directoryUri, 'example.db', 'application/octet-stream')
+        .then(async (uri) => {
+          await FileSystem.writeAsStringAsync(uri, base64, { encoding : FileSystem.EncodingType.Base64 });
+        })
+        .catch((e) => console.log(e));
+      } else {
+        console.log("Permission not granted");
+      }
+    } else {
+      await Sharing.shareAsync(FileSystem.documentDirectory + 'SQLite/example.db');
+    }
+  }
+
+  const importDb = async () => {
+    let result = await DocumentPicker.getDocumentAsync({
+      copyToCacheDirectory: true
+    });
+
+    if (result.type === 'success') {
+      setIsLoading(true);
+      
+      if (!(await FileSystem.getInfoAsync(FileSystem.documentDirectory + 'SQLite')).exists) {
+        await FileSystem.makeDirectoryAsync(FileSystem.documentDirectory + 'SQLite');
+      }
+
+      const base64 = await FileSystem.readAsStringAsync(
+        result.uri,
+        {
+          encoding: FileSystem.EncodingType.Base64
+        }
+      );
+
+      await FileSystem.writeAsStringAsync(FileSystem.documentDirectory + 'SQLite/example.db', base64, { encoding: FileSystem.EncodingType.Base64 });
+      await db.closeAsync();
+      setDb(SQLite.openDatabase('example.db'));
+    }
+  };
 
   useEffect(() => {
     db.transaction(tx => {
@@ -23,7 +108,7 @@ export default function App() {
     });
 
     setIsLoading(false);
-  }, []);
+  }, [db]);
 
   if (isLoading) {
     return (
@@ -95,6 +180,8 @@ export default function App() {
       <TextInput value={currentName} placeholder='name' onChangeText={setCurrentName} />
       <Button title="Add Name" onPress={addName} />
       {showNames()}
+      <Button title="Export Db" onPress={exportDb} />
+      <Button title="Import Db" onPress={importDb} />
       <StatusBar style="auto" />
     </View>
   );
